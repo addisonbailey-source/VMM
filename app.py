@@ -1,151 +1,163 @@
-# =========================================================
-# 1. IMPORTS
-# =========================================================
 import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
+from matplotlib.colors import ListedColormap
 from scipy.stats import gaussian_kde
-import warnings
 
-warnings.filterwarnings("ignore")
-
-# =========================================================
-# 2. PAGE SETTINGS
-# =========================================================
+# Page config
 st.set_page_config(
-    page_title="VMM Survey Summary Dashboard",
+    page_title="VMM Feedback Survey Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-st.markdown('<h1 style="text-align: center; color: #1E293B;">📊 VMM Survey Summary Dashboard</h1>', unsafe_allow_html=True)
+# ----- Load Data -----
+try:
+    df = pd.read_csv(r"C:\Users\addis\Documents\notepad\VMM\Use Me VMM Mock Data.csv")
+except Exception as e:
+    st.error(f"Error loading CSV file: {e}")
+    st.stop()
 
-# =========================================================
-# 3. DATA LOADING (THE REAL EXCEL/CSV DATA)
-# =========================================================
-@st.cache_data
-def load_survey_data():
-    # Load the CSV data file
-    return pd.read_csv("Use Me VMM Mock Data.csv")
+# ----- Define Constants -----
+VALUES_COLS = ['Generational Wisdom Rating (1-5)', 'Vision Rating (1-5)',
+               'Community Rating (1-5)', 'Traditions Rating (1-5)']
+VALUES_COLORS = ['#70CBD3', '#4A4B4D', '#EB4223', '#F88A61']
+VALUES_LABELS = ['Gen. Wisdom', 'Vision', 'Community', 'Traditions']
 
-df = load_survey_data()
+GROWTH_COLS = ['Skills Growth Rating (1-5)', 'Knowledge Growth Rating (1-5)',
+               'Transformation Rating (1-5)']
+GROWTH_COLORS = ['#148281', '#A8462F', '#F16029']
+GROWTH_LABELS = ['Skills Growth', 'Knowledge Growth', 'Transformation']
 
-# =========================================================
-# 4. SIDEBAR FILTERS
-# =========================================================
-st.sidebar.header("🎯 Filters")
+# Get unique roles
+ALL_ROLES = ['All Roles'] + sorted(df['Role'].dropna().unique().tolist())
 
-# Clean drop-down filter based directly on the 'Role' column from your data
-available_roles = ["All Roles"] + list(df['Role'].dropna().unique())
-selected_role = st.sidebar.selectbox("Select Role Filter", options=available_roles)
-
-# Filter the data dynamically
-if selected_role != "All Roles":
-    filtered_data = df[df['Role'] == selected_role]
-else:
-    filtered_data = df.copy()
-
-# =========================================================
-# 5. DASHBOARD LAYOUT
-# =========================================================
-col1, col2 = st.columns([1, 1.3], gap="large")
-
-# --- LEFT COLUMN: VMM Category Averages ---
-with col1:
-    st.subheader("📌 Category Averages")
+# ----- Helper Functions -----
+def calc_percentage_4_or_5(series):
+    """Calculate percentage of responses that are 4 or 5"""
+    numeric_col = pd.to_numeric(series, errors='coerce')
+    count_4_or_5 = numeric_col.isin([4, 5]).sum()
+    total_valid = numeric_col.count()
     
-    # Calculate averages dynamically from your actual (1-5) ratings data
-    gw_avg = filtered_data['Generational Wisdom Rating (1-5)'].mean()
-    v_avg  = filtered_data['Vision Rating (1-5)'].mean()
-    c_avg  = filtered_data['Community Rating (1-5)'].mean()
-    t_avg  = filtered_data['Traditions Rating (1-5)'].mean()
-    tr_avg = filtered_data['Transformation Rating (1-5)'].mean()
-
-    # Display clean 2-column metrics
-    m_col1, m_col2 = st.columns(2)
-    with m_col1:
-        st.metric(label="Generational Wisdom", value=f"{gw_avg:.2f} / 5")
-        st.metric(label="Vision", value=f"{v_avg:.2f} / 5")
-        st.metric(label="Transformation", value=f"{tr_avg:.2f} / 5")
-    with m_col2:
-        st.metric(label="Community", value=f"{c_avg:.2f} / 5")
-        st.metric(label="Traditions", value=f"{t_avg:.2f} / 5")
-
-# --- RIGHT COLUMN: Distribution Waves (Joypy Plot) ---
-with col2:
-    st.subheader("📈 Distribution Trends")
-    
-    # Target the exact Rating column names from your notebook
-    target_wave_cols = [
-        'Generational Wisdom Rating (1-5)',
-        'Vision Rating (1-5)',
-        'Community Rating (1-5)',
-        'Traditions Rating (1-5)',
-        'Transformation Rating (1-5)'
-    ]
-    
-    # Rename columns temporarily just for chart labels so they look clean on the dashboard
-    rename_dict = {
-        'Generational Wisdom Rating (1-5)': 'Generational Wisdom',
-        'Vision Rating (1-5)': 'Vision',
-        'Community Rating (1-5)': 'Community',
-        'Traditions Rating (1-5)': 'Traditions',
-        'Transformation Rating (1-5)': 'Transformation'
-    }
-    
-    # Prepare the data subset for plotting
-    plot_data = filtered_data[target_wave_cols].rename(columns=rename_dict)
-
-    if len(plot_data) > 1:
-        # Create joypy-style ridgeline plot with beautiful overlapping density curves
-        fig, ax = plt.subplots(figsize=(8, 5))
-        
-        x = np.linspace(0.5, 5.5, 300)
-        colors = plt.cm.autumn_r(np.linspace(0, 1, len(plot_data.columns)))
-        
-        n_cols = len(plot_data.columns)
-        
-        for i, col in enumerate(plot_data.columns):
-            data = pd.to_numeric(plot_data[col], errors='coerce').dropna()
-            if len(data) > 1:
-                # Calculate KDE
-                kde = gaussian_kde(data, bw_method='scott')
-                density = kde(x)
-                
-                # Normalize and offset for ridgeline effect
-                density_norm = density / density.max() * 0.85
-                y_offset = n_cols - i - 1
-                
-                # Create the wavy mountain effect with fill
-                ax.fill_between(x, y_offset, y_offset + density_norm, 
-                               alpha=0.7, color=colors[i], edgecolor='white', linewidth=1.5)
-                ax.plot(x, y_offset + density_norm, color=colors[i], linewidth=2)
-        
-        # Styling to match joypy
-        ax.set_xlim(0.5, 5.5)
-        ax.set_ylim(-0.3, n_cols)
-        ax.set_xlabel('Score (1-5)', fontsize=11)
-        ax.set_ylabel('')
-        ax.set_title('Score Spread Densities (1 to 5)', fontsize=13, pad=15)
-        
-        # Set y-axis labels to category names
-        ax.set_yticks(range(n_cols))
-        ax.set_yticklabels(list(reversed(plot_data.columns)), fontsize=10)
-        
-        # Clean up styling
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['left'].set_visible(False)
-        ax.grid(axis='x', alpha=0.2, linestyle='--')
-        
-        plt.tight_layout()
-        st.pyplot(fig)
+    if total_valid > 0:
+        percentage = (count_4_or_5 / total_valid) * 100
+        return f"{percentage:.0f}%"
     else:
-        st.info("Not enough records found to generate distribution waves. Try picking another role or 'All Roles'.")
+        return "N/A"
 
-# =========================================================
-# 6. FOOTER
-# =========================================================
-st.markdown("---")
-st.caption(f"Showing data for: {selected_role} | Dataset size: {len(filtered_data)} rows")
+def plot_ridgeline(ax, data_df, cols, colors, title, x_label='Rating (1-5)'):
+    """Create KDE ridgeline plot"""
+    x_range = np.linspace(0, 6, 300)
+    overlap = 1.5
+    n = len(cols)
+    
+    for i, (col, color) in enumerate(zip(cols, colors)):
+        vals = pd.to_numeric(data_df[col], errors='coerce').dropna()
+        if len(vals) < 2:
+            continue
+        
+        kde = gaussian_kde(vals, bw_method=0.4)
+        y = kde(x_range)
+        y = y / y.max()
+        base = (n - 1 - i) * overlap * 0.6
+        
+        ax.fill_between(x_range, base, base + y, color=color, alpha=0.75)
+        ax.plot(x_range, base + y, color='white', linewidth=0.8)
+        ax.axhline(base, color='white', linewidth=0.3, alpha=0.4)
+        ax.text(-0.05, base + 0.1,
+                col.replace(' Rating (1-5)', ''),
+                ha='right', va='bottom', fontsize=8.5, color='#333333',
+                transform=ax.get_yaxis_transform())
+    
+    ax.set_xlim(0.5, 5.5)
+    ax.set_ylim(-0.1, n * overlap * 0.6 + 0.8)
+    ax.set_xlabel(x_label, fontsize=10)
+    ax.set_title(title, fontsize=13, fontweight='bold', pad=8)
+    ax.set_yticks([])
+    ax.spines[['top', 'right', 'left']].set_visible(False)
+    ax.set_facecolor('#F9F9F9')
+
+def plot_percentage_panel(ax, data_df, cols, colors, labels, title):
+    """Display percentages of 4 or 5 ratings in a clean panel"""
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis('off')
+    ax.set_title(title, fontsize=13, fontweight='bold', pad=8)
+    ax.set_facecolor('#F9F9F9')
+    
+    n = len(cols)
+    spacing = 1.0 / (n + 1)
+    
+    for i, (col, color, label) in enumerate(zip(cols, colors, labels)):
+        y_pos = 1 - (i + 1) * spacing
+        percentage = calc_percentage_4_or_5(data_df[col])
+        
+        # Label
+        ax.text(0.5, y_pos + 0.08, label,
+                ha='center', va='center', fontsize=10,
+                color='#333333', fontweight='bold')
+        
+        # Percentage in brand color
+        ax.text(0.5, y_pos - 0.02, percentage,
+                ha='center', va='center', fontsize=28,
+                color=color, fontweight='bold')
+
+# ----- Sidebar Filter -----
+st.sidebar.header("🎯 Filters")
+selected_role = st.sidebar.selectbox(
+    "Select Role:",
+    options=ALL_ROLES,
+    index=0
+)
+
+# Filter data based on role
+if selected_role != 'All Roles':
+    filtered_df = df[df['Role'] == selected_role].copy()
+    subtitle = f'Role: {selected_role} (n={len(filtered_df)})'
+else:
+    filtered_df = df.copy()
+    subtitle = 'All Roles'
+
+# ----- Title -----
+st.title("📊 VMM Feedback Survey Dashboard")
+st.markdown(f"**{subtitle}**")
+
+# ----- Main Dashboard -----
+fig = plt.figure(figsize=(16, 10))
+fig.patch.set_facecolor('white')
+
+# Create grid: 2 rows (Values top, Growth bottom) x 2 cols (Ridgeline left, Percentages right)
+gs = gridspec.GridSpec(2, 2, figure=fig,
+                      height_ratios=[1, 1],
+                      width_ratios=[2.5, 1],
+                      hspace=0.35, wspace=0.25,
+                      left=0.08, right=0.95, top=0.90, bottom=0.2)
+
+# VALUES ROW (top)
+ax_values_ridge = fig.add_subplot(gs[0, 0])
+ax_values_pct = fig.add_subplot(gs[0, 1])
+
+plot_ridgeline(ax_values_ridge, filtered_df, VALUES_COLS, VALUES_COLORS, 'Values')
+plot_percentage_panel(ax_values_pct, filtered_df, VALUES_COLS, VALUES_COLORS,
+                     VALUES_LABELS, 'Experienced the Value')
+
+# GROWTH ROW (bottom)
+ax_growth_ridge = fig.add_subplot(gs[1, 0])
+ax_growth_pct = fig.add_subplot(gs[1, 1])
+
+plot_ridgeline(ax_growth_ridge, filtered_df, GROWTH_COLS, GROWTH_COLORS, 'Growth')
+plot_percentage_panel(ax_growth_pct, filtered_df, GROWTH_COLS, GROWTH_COLORS,
+                     GROWTH_LABELS, 'Experienced Growth')
+
+st.pyplot(fig)
+
+# ----- Summary Stats -----
+st.sidebar.markdown("---")
+st.sidebar.subheader("📈 Summary Stats")
+st.sidebar.metric("Total Responses", len(filtered_df))
+
+if 'Total VMM Projects Participated' in filtered_df.columns:
+    avg_projects = filtered_df['Total VMM Projects Participated'].mean()
+    st.sidebar.metric("Avg Projects Participated", f"{avg_projects:.1f}")

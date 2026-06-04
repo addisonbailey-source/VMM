@@ -5,7 +5,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import joypy  # Make sure to run 'pip install joypy' in your terminal if you haven't!
+from scipy.stats import gaussian_kde
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -98,17 +98,28 @@ with col2:
     plot_data = filtered_data[target_wave_cols].rename(columns=rename_dict)
 
     if len(plot_data) > 1:
-        # Generate the exact wavy mountain plot using joypy
-        fig, axes = joypy.joyplot(
-            plot_data,
-            colormap=plt.cm.autumn_r,  # Beautiful fiery orange-red gradient waves
-            fade=True,
-            grid=False,
-            figsize=(7, 4.5),
-            title="Score Spread Densities (1 to 5)"
-        )
+        # Create ridgeline plot using matplotlib (joypy-compatible visualization)
+        fig, ax = plt.subplots(figsize=(10, 6))
         
-        # Streamlit's native command to display Matplotlib figures cleanly!
+        x = np.linspace(1, 5, 200)
+        colors = plt.cm.autumn_r(np.linspace(0, 1, len(plot_data.columns)))
+        
+        for i, col in enumerate(plot_data.columns):
+            data = pd.to_numeric(plot_data[col], errors='coerce').dropna()
+            if len(data) > 1:
+                kde = gaussian_kde(data)
+                density = kde(x)
+                density = density / density.max() * 0.8  # Normalize height
+                ax.fill_between(x, i, i + density, alpha=0.6, color=colors[i], label=col)
+                ax.plot(x, i + density, color=colors[i], linewidth=2)
+        
+        ax.set_ylim(-0.5, len(plot_data.columns))
+        ax.set_xlim(0.5, 5.5)
+        ax.set_xlabel('Score (1-5)', fontsize=12)
+        ax.set_title('Score Spread Densities (1 to 5)', fontsize=14)
+        ax.set_yticks(range(len(plot_data.columns)))
+        ax.set_yticklabels(plot_data.columns, fontsize=10)
+        plt.tight_layout()
         st.pyplot(fig)
     else:
         st.info("Not enough records found to generate distribution waves. Try picking another role or 'All Roles'.")

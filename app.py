@@ -26,12 +26,8 @@ st.markdown('<h1 style="text-align: center; color: #1E293B;">📊 VMM Survey Sum
 # =========================================================
 @st.cache_data
 def load_survey_data():
-    # Make sure your spreadsheet file is in the same folder as this app.py script!
-    # If using your Excel file:
-    return pd.read_excel("Use Me VMM Mock Data.xlsx")
-    
-    # If you converted it to a CSV, use this instead:
-    # return pd.read_csv("VMM_Feedback_Survey_Updated.csv")
+    # Load the CSV data file
+    return pd.read_csv("Use Me VMM Mock Data.csv")
 
 df = load_survey_data()
 

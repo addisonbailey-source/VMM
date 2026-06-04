@@ -98,27 +98,47 @@ with col2:
     plot_data = filtered_data[target_wave_cols].rename(columns=rename_dict)
 
     if len(plot_data) > 1:
-        # Create ridgeline plot using matplotlib (joypy-compatible visualization)
-        fig, ax = plt.subplots(figsize=(10, 6))
+        # Create joypy-style ridgeline plot with beautiful overlapping density curves
+        fig, ax = plt.subplots(figsize=(8, 5))
         
-        x = np.linspace(1, 5, 200)
+        x = np.linspace(0.5, 5.5, 300)
         colors = plt.cm.autumn_r(np.linspace(0, 1, len(plot_data.columns)))
+        
+        n_cols = len(plot_data.columns)
         
         for i, col in enumerate(plot_data.columns):
             data = pd.to_numeric(plot_data[col], errors='coerce').dropna()
             if len(data) > 1:
-                kde = gaussian_kde(data)
+                # Calculate KDE
+                kde = gaussian_kde(data, bw_method='scott')
                 density = kde(x)
-                density = density / density.max() * 0.8  # Normalize height
-                ax.fill_between(x, i, i + density, alpha=0.6, color=colors[i], label=col)
-                ax.plot(x, i + density, color=colors[i], linewidth=2)
+                
+                # Normalize and offset for ridgeline effect
+                density_norm = density / density.max() * 0.85
+                y_offset = n_cols - i - 1
+                
+                # Create the wavy mountain effect with fill
+                ax.fill_between(x, y_offset, y_offset + density_norm, 
+                               alpha=0.7, color=colors[i], edgecolor='white', linewidth=1.5)
+                ax.plot(x, y_offset + density_norm, color=colors[i], linewidth=2)
         
-        ax.set_ylim(-0.5, len(plot_data.columns))
+        # Styling to match joypy
         ax.set_xlim(0.5, 5.5)
-        ax.set_xlabel('Score (1-5)', fontsize=12)
-        ax.set_title('Score Spread Densities (1 to 5)', fontsize=14)
-        ax.set_yticks(range(len(plot_data.columns)))
-        ax.set_yticklabels(plot_data.columns, fontsize=10)
+        ax.set_ylim(-0.3, n_cols)
+        ax.set_xlabel('Score (1-5)', fontsize=11)
+        ax.set_ylabel('')
+        ax.set_title('Score Spread Densities (1 to 5)', fontsize=13, pad=15)
+        
+        # Set y-axis labels to category names
+        ax.set_yticks(range(n_cols))
+        ax.set_yticklabels(list(reversed(plot_data.columns)), fontsize=10)
+        
+        # Clean up styling
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        ax.grid(axis='x', alpha=0.2, linestyle='--')
+        
         plt.tight_layout()
         st.pyplot(fig)
     else:
